@@ -7,8 +7,8 @@ import numpy as np
 
 """ CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV"""
 
-# CALI_FILE_DIR = './'
-CALI_FILE_DIR = '../utils/'
+CALI_FILE_DIR = './'
+# CALI_FILE_DIR = '../utils/'
 
 
 class Drone(Tello):
@@ -185,7 +185,7 @@ class Drone(Tello):
     """ aruco related """
 
     def undistort(self, frame):
-        frame = cv2.undistort(frame, self.intrinsic, self.distortion, None, self.newcameramtx)
+        frame = cv2.undistort(frame, self.intrinsic, self.distortion, None, self.newCamMtx)
         return frame
 
     @staticmethod

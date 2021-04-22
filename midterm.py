@@ -13,9 +13,9 @@ drone = Drone('G1')
 # drone.ki = np.array([0.008, 0.015, 0, 0])
 # drone.kd = np.array([1.16, 1.15, 1.05, 0])
 
-drone.kp = np.array([0.8, 1.2, 0.8, 25])
-drone.ki = np.array([0.012, 0.02, 0, 0])
-drone.kd = np.array([1.2, 1.05, 1.15, 0])
+drone.kp = np.array([0.9, 1.25, 0.75, 25])
+drone.ki = np.array([0.015, 0.015, 0, 0])
+drone.kd = np.array([1.22, 1, 1.25, 0])
 
 err = np.zeros((4,))
 errSum = np.zeros((4,))
@@ -25,7 +25,7 @@ GUIDE_ID = 0
 TUNNEL_ID = 3
 JUMP_ID = 4
 GOAL_ID = 5
-TURN_ID = 9
+forceforward_ID = 9
 
 """ 0. take off """
 # by keyboard
@@ -45,10 +45,12 @@ while True:
     cv2.imshow('drone', frame)
     cv2.waitKey(50)
 
-drone.move_forward(160)
+print(forward_distance)
+
+drone.move_forward(int(forward_distance))
 drone.move_down(60)
-drone.move_forward(130)
-drone.go_xyz_speed(-30, -200, 50, 100)
+drone.move_forward(150)
+drone.go_xyz_speed(0, -250, 50, 100)
 print('phase 1 clear')
 # drone.land()
 # exit()
@@ -69,30 +71,35 @@ while True:
         # aim the aruco
         rvec, tvec = drone.estimatePose(arucos[JUMP_ID])
         # tune range of aimming
-        if abs(tvec[0]) < 10 and abs(tvec[1]) < 10 and (tvec[2] < 90):
+        if abs(tvec[0]) < 15 and abs(tvec[1]) < 15 and (tvec[2] < 90):
             drone.stop()
             break
-        err = np.array([tvec[0], 0 - tvec[1], tvec[2] - 80, 0])
+        err = np.array([tvec[0], -5 - tvec[1], tvec[2] - 80, 0])
         result, errSum, prevErr = drone.PID(err, errSum, prevErr)
         drone.send_rc_control(int(result[0]), int(result[2]), int(result[1]), 0)
         moved = True
     else:
         if moved:
-            drone.send_rc_control(0, 0, 0, 0)
+            drone.send_rc_control(0, -15, 0, 0)
             moved = False
     cv2.imshow('drone', frame)
     cv2.waitKey(50)
 
 print('-> jump aimmed!')
 drone.move_up(50)
-drone.move_forward(150)
+drone.move_forward(120)
 drone.move_down(90)
 print('phase 2 clear')
 
 """ 3 & 4. guiding """
 
+err = np.zeros((4,))
+errSum = np.zeros((4,))
+prevErr = np.zeros((4,))
+
 moved = True
 turned = False
+force_forward = False
 while True:
     frame = drone.background_frame_read.frame
     arucos = drone.find_arucos(frame)
@@ -102,26 +109,38 @@ while True:
         result, errSum, prevErr = drone.PID(err, errSum, prevErr)
         drone.send_rc_control(int(result[0]), int(result[2]), int(result[1]), 0)
         moved = True
-    elif turned == False and TURN_ID in arucos:
+    elif force_forward == False and forceforward_ID in arucos:
+        # drone.go_xyz_speed(110, 30, 0, 100)
+        drone.move_forward(120)
         drone.rotate_clockwise(45)
-        turned = True
+        err = np.zeros((4,))
+        prevErr = np.zeros((4,))
+        errSum = np.zeros((4,))
+        drone.kp = np.array([0.5, 1.25, 0.5, 25])
+        drone.ki = np.array([0.008, 0.02, 0, 0])
+        drone.kd = np.array([1.22, 1, 1.2, 0])
+        force_forward = True
     elif GOAL_ID in arucos:
-        # drone.kp = np.array([0.8, 1.2, 0.4, 15])
-        # drone.kd = np.array([0.9, 0.9, 0.6, 0])
+
         # aim the aruco
         rvec, tvec = drone.estimatePose(arucos[GOAL_ID])
+        # if turned == False and tvec[2] < 70:
+        #     turned = True
         # tune range of aimming
-        if abs(tvec[0]) < 7 and (tvec[2] < 65):
+        if abs(tvec[0]) < 4 and (65 < tvec[2] < 70):
             drone.stop()
             break
         # tune aimming PID
-        err = np.array([0.8*tvec[0], 0.8*(0 - tvec[1]), 0.8(tvec[2] - 60), 0])
+        err = np.array([tvec[0], (-5 - tvec[1]), (tvec[2] - 65), 0])
         result, errSum, prevErr = drone.PID(err, errSum, prevErr)
         drone.send_rc_control(int(result[0]), int(result[2]), int(result[1]), 0)
         moved = True
     else:
         if moved:
-            drone.send_rc_control(0, 0, 0, 0)
+            if force_forward:
+                drone.send_rc_control(0, -15, 0, 0)
+            else:
+                drone.send_rc_control(0, 0, 0, 0)
             moved = False
     cv2.imshow('drone', frame)
     cv2.waitKey(50)
