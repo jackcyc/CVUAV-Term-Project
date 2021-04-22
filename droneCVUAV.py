@@ -7,8 +7,8 @@ import numpy as np
 
 """ CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV CVUAV"""
 
-CALI_FILE_DIR = './'
-# CALI_FILE_DIR = '../utils/'
+# CALI_FILE_DIR = './'
+CALI_FILE_DIR = '../utils/'
 
 
 class Drone(Tello):
@@ -58,7 +58,7 @@ class Drone(Tello):
         vec = np.dot([vgx, vgy], rotate)
         self.send_rc_control(int(50*vec[1]), int(50*vec[0]), 0, 0)
         speed = (vgx**2+vgy**2)**0.5
-        time.sleep(speed/20)
+        time.sleep(speed/15)
         self.send_rc_control(0, 0, 0, 0)
 
     def joystick(self, key):
@@ -171,7 +171,7 @@ class Drone(Tello):
         return xspeed, zspeed, yspeed, yawspeed
 
     def PID(self, err, errSum, prevErr, base=0):
-        limit = 60
+        limit = 50
         errSum += err
         P = self.kp * err
         I = self.ki * errSum
@@ -204,9 +204,6 @@ class Drone(Tello):
     def estimatePose(self, corners, arucoSize=15):
         rvec, tvec, _objPoints = \
             cv2.aruco.estimatePoseSingleMarkers(corners, arucoSize, self.intrinsic, self.distortion)
-        frame = self.background_frame_read.frame
-        cv2.putText(frame, tvec[0, 0].__str__(), (10, 10), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(frame, rvec[0, 0].__str__(), (10, 30), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
         return rvec[0, 0], tvec[0, 0]
         # frame = cv2.aruco.drawAxis(frame, intrinsic, distortion, rvec[0], tvec[0], 10)
 
@@ -216,50 +213,97 @@ if __name__ == '__main__':
     drone.kp = np.array([1.08, 1.2, 1, 25])
     drone.ki = np.array([0.012, 0.015, 0, 0])
     drone.kd = np.array([1.16, 1.05, 1.15, 0])
-
     err = np.zeros((4,))
     errSum = np.zeros((4,))
     prevErr = np.zeros((4,))
+    while True:
+        frame = drone.background_frame_read.frame
+        arucos = drone.find_arucos(frame)
+        if 3 in arucos:
+            rvec, tvec = drone.estimatePose(arucos[3], 15)
+            print(tvec)
+        else:
+            pass
+
+        cv2.imshow('img', frame)
+        cv2.waitKey(33)
+
+
+
+    while not drone.is_flying:
+        frame = drone.background_frame_read.frame
+        arucos = drone.find_arucos(frame)
+        if 4 in arucos:
+            rvec, tvec = drone.estimatePose(arucos[4], 8.5)
+            cv2.putText(frame, tvec.__str__(), (10, 10), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, rvec.__str__(), (10, 30), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+            # break
+        cv2.imshow('img', frame)
+        cv2.waitKey(33)
+
+    drone.connect()
+
+    while True:
+        frame = drone.background_frame_read.frame
+        arucos = drone.find_arucos(frame)
+        if 4 in arucos:
+            rvec, tvec = drone.estimatePose(arucos[4], 8.5)
+            cv2.putText(frame, tvec.__str__(), (10, 10), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, rvec.__str__(), (10, 30), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+            break
+
+        cv2.imshow('img', frame)
+        cv2.waitKey(33)
+
+    # max(-1*limit, min(limit, result[i]))
+    drone.go_xyz_speed(int(tvec[2]-40), int(-1.24*tvec[0]), int(1.2*(-10-tvec[1])), 100)
+
+    drone.send_rc_control(0, 0, 0, 0)
+    drone.land()
+    exit()
+
 
     mid = False
     moved = True
     while True:
         frame = drone.background_frame_read.frame
         arucos = drone.find_arucos(frame)
-        if 0 in arucos:
-            rvec, tvec = drone.estimatePose(arucos[0], 8.5)
-            if abs(rvec[2]) > 0.5:
-                # err = np.array([0, 0, tvec[2] - 90, rvec[2]])
-                pass
-            else:
-                err = np.array([tvec[0], 0 - tvec[1], tvec[2] - 90, 0])
-            result, errSum, prevErr = drone.PID(err, errSum, prevErr)
-            (xspeed, yspeed, zspeed, yawspeed) = result
-            moved = True
-        elif 4 in arucos:
-            rvec, tvec = drone.estimatePose(arucos[4], 8.5)
-            if mid == False and (abs(tvec[0]) > 5 or abs(tvec[1]) > 10):
-                err = np.array([tvec[0], 0 - tvec[1], 0, rvec[2]])
-                result, errSum, prevErr = drone.PID(err, errSum, prevErr)
-                (xspeed, yspeed, zspeed, yawspeed) = result
-            else:
-                pass
-                # mid = True
-                # if tvec[2] > 100:
-                #     err = np.array([0, 0, tvec[2] - 80, -1*rvec[2]])
-                #     result, errSum, prevErr = Drone.PID(err, errSum, prevErr, rvec[2])
-                #     (xspeed, yspeed, zspeed, yawspeed) = result
-                # else:
-                #     drone.stop()
-                #     drone.move_up(80)
-                #     drone.move_forward(150)
-                #     drone.land()
-        else:
-            if moved:
-                drone.send_rc_control(0, 0, 0, 0)
-                moved = False
-        if moved:
-            drone.send_rc_control(int(xspeed), int(zspeed), int(yspeed), int(yawspeed))
+        if 4 in arucos:
+            rvec, tvec = drone.estimatePose(arucos[4], 15)
+        # if 0 in arucos:
+        #     rvec, tvec = drone.estimatePose(arucos[0], 8.5)
+        #     if abs(rvec[2]) > 0.5:
+        #         # err = np.array([0, 0, tvec[2] - 90, rvec[2]])
+        #         pass
+        #     else:
+        #         err = np.array([tvec[0], 0 - tvec[1], tvec[2] - 90, 0])
+        #     result, errSum, prevErr = drone.PID(err, errSum, prevErr)
+        #     (xspeed, yspeed, zspeed, yawspeed) = result
+        #     moved = True
+        # elif 4 in arucos:
+        #     rvec, tvec = drone.estimatePose(arucos[4], 8.5)
+        #     if mid == False and (abs(tvec[0]) > 5 or abs(tvec[1]) > 10):
+        #         err = np.array([tvec[0], 0 - tvec[1], 0, rvec[2]])
+        #         result, errSum, prevErr = drone.PID(err, errSum, prevErr)
+        #         (xspeed, yspeed, zspeed, yawspeed) = result
+        #     else:
+        #         pass
+        #         # mid = True
+        #         # if tvec[2] > 100:
+        #         #     err = np.array([0, 0, tvec[2] - 80, -1*rvec[2]])
+        #         #     result, errSum, prevErr = Drone.PID(err, errSum, prevErr, rvec[2])
+        #         #     (xspeed, yspeed, zspeed, yawspeed) = result
+        #         # else:
+        #         #     drone.stop()
+        #         #     drone.move_up(80)
+        #         #     drone.move_forward(150)
+        #         #     drone.land()
+        # else:
+        #     if moved:
+        #         drone.send_rc_control(0, 0, 0, 0)
+        #         moved = False
+        # if moved:
+        #     drone.send_rc_control(int(xspeed), int(zspeed), int(yspeed), int(yawspeed))
 
         cv2.imshow('img', frame)
         cv2.waitKey(33)
